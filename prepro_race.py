@@ -80,8 +80,7 @@ def get_embedding(counter, data_type, limit=-1, emb_file=None, size=None, vec_si
         assert size is not None
         assert vec_size is not None
         with open(emb_file, "r", encoding="utf-8") as fh:
-            info = fh.readline()
-            print('embedding info : ', info)
+            print('embedding info : ', fh.readline())
             for line in tqdm(fh, total=size):
                 array = line.split()
                 word = "".join(array[0:-vec_size])

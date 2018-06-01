@@ -1,5 +1,5 @@
 import tensorflow as tf
-from layers import initializer, regularizer, residual_block, highway, conv, mask_logits, trilinear, total_params, optimized_trilinear_for_attention
+from layers import initializer, regularizer, residual_block, highway, conv, mask_logits, trilinear, total_params, optimized_trilinear_for_attention, multihead_attention
 
 class Model(object):
     def __init__(self, config, batch, word_mat=None, char_mat=None, trainable=True, opt=True, demo = False, graph = None):
@@ -20,6 +20,9 @@ class Model(object):
                 self.y2 = tf.placeholder(tf.int32, [None, config.test_para_limit],"answer_index2")
             else:
                 self.c, self.q, self.r, self.w1, self.w2, self.w3, self.qa_id = batch.get_next()
+                # print(self.c) # Tensor("IteratorGetNext:0", shape=(?, 400), dtype=int32)
+                # print(self.q) # Tensor("IteratorGetNext:1", shape=(?, 50), dtype=int32)
+                # print(self.r) # Tensor("IteratorGetNext:2", shape=(?, 50), dtype=int32)
                 # self.c, self.q, self.ch, self.qh, self.y1, self.y2, self.qa_id = batch.get_next()
 
             # self.word_unk = tf.get_variable("word_unk", shape = [config.glove_dim], initializer=initializer())
@@ -30,18 +33,18 @@ class Model(object):
                 char_mat, dtype=tf.float32)).
             '''
 
-            self.c_mask = tf.cast(self.c, tf.bool)
+            self.c_mask = tf.cast(self.c, tf.bool) # ?, 400
             self.q_mask = tf.cast(self.q, tf.bool)
             self.c_len = tf.reduce_sum(tf.cast(self.c_mask, tf.int32), axis=1)
             self.q_len = tf.reduce_sum(tf.cast(self.q_mask, tf.int32), axis=1)
             
             self.r_mask = tf.cast(self.r, tf.bool)
-            self.r_len = tf.reduce_sum(tf.cast(self.r_mask, tf.int32), axis=1)
             self.w1_mask = tf.cast(self.w1, tf.bool)
-            self.w1_len = tf.reduce_sum(tf.cast(self.w1_mask, tf.int32), axis=1)
             self.w2_mask = tf.cast(self.w2, tf.bool)
-            self.w2_len = tf.reduce_sum(tf.cast(self.w2_mask, tf.int32), axis=1)
             self.w3_mask = tf.cast(self.w3, tf.bool)
+            self.r_len = tf.reduce_sum(tf.cast(self.r_mask, tf.int32), axis=1)
+            self.w1_len = tf.reduce_sum(tf.cast(self.w1_mask, tf.int32), axis=1)
+            self.w2_len = tf.reduce_sum(tf.cast(self.w2_mask, tf.int32), axis=1)
             self.w3_len = tf.reduce_sum(tf.cast(self.w3_mask, tf.int32), axis=1)
 
 
@@ -49,8 +52,8 @@ class Model(object):
                 N, CL = config.batch_size if not self.demo else 1, config.char_limit
                 self.c_maxlen = tf.reduce_max(self.c_len)
                 self.q_maxlen = tf.reduce_max(self.q_len)
-                self.c = tf.slice(self.c, [0, 0], [N, self.c_maxlen])
-                self.q = tf.slice(self.q, [0, 0], [N, self.q_maxlen])
+                self.c = tf.slice(self.c, [0, 0], [N, self.c_maxlen]) # 32,?
+                self.q = tf.slice(self.q, [0, 0], [N, self.q_maxlen]) # 32,?
                 self.c_mask = tf.slice(self.c_mask, [0, 0], [N, self.c_maxlen])
                 self.q_mask = tf.slice(self.q_mask, [0, 0], [N, self.q_maxlen])
 
@@ -123,7 +126,9 @@ class Model(object):
             qh_emb = tf.reshape(qh_emb, [N, QL, ch_emb.shape[-1]])
             '''
 
+            # 32,?,300 batch,self.c_maxlen,emb_dim
             c_emb = tf.nn.dropout(tf.nn.embedding_lookup(self.word_mat, self.c), 1.0 - self.dropout)
+            # 32,?,300
             q_emb = tf.nn.dropout(tf.nn.embedding_lookup(self.word_mat, self.q), 1.0 - self.dropout)
 
             r_emb = tf.nn.dropout(tf.nn.embedding_lookup(self.word_mat, self.r), 1.0 - self.dropout)
@@ -136,9 +141,10 @@ class Model(object):
             q_emb = tf.concat([q_emb, qh_emb], axis=2)
             '''
 
+            # 32,?,96
             c_emb = highway(c_emb, size = d, scope = "highway", dropout = self.dropout, reuse = None)
+            # 32,?,96
             q_emb = highway(q_emb, size = d, scope = "highway", dropout = self.dropout, reuse = True)
-
             r_emb = highway(r_emb, size = d, scope = "highway", dropout = self.dropout, reuse = True)
             w1_emb = highway(w1_emb, size = d, scope = "highway", dropout = self.dropout, reuse = True)
             w2_emb = highway(w2_emb, size = d, scope = "highway", dropout = self.dropout, reuse = True)
@@ -270,10 +276,10 @@ class Model(object):
             self.w32c = tf.matmul(tf.matmul(S_, S_T), c)
             attention_output3 = [c, self.c2w3, c * self.c2w3, c * self.w32c]
 
-        with tf.variable_scope("Model_Encoder_Layer"):
+        with tf.variable_scope("Model_Encoder_Layer", reuse = None):
             inputs = tf.concat(attention_outputs, axis = -1)
             self.enc = [conv(inputs, d, name = "input_projection")]
-            for i in range(3):
+            for i in range(1):
                 if i % 2 == 0: # dropout every 2 blocks
                     self.enc[i] = tf.nn.dropout(self.enc[i], 1.0 - self.dropout)
                 self.enc.append(
@@ -290,9 +296,9 @@ class Model(object):
                         reuse = True if i > 0 else None,
                         dropout = self.dropout)
                     )
-        with tf.variable_scope("R_Encoder_Layer"):
-            inputs = tf.concat(attention_output0, axis = -1)
-            self.enc0 = [conv(inputs, d, name = "input_projection")]
+        with tf.variable_scope("Model_Encoder_Layer", reuse = True):
+            input0 = tf.concat(attention_output0, axis = -1)
+            self.enc0 = [conv(input0, d, name = "input_projection")]
             self.enc0[0] = tf.nn.dropout(self.enc0[0], 1.0 - self.dropout)
             self.enc0.append(
                 residual_block(self.enc0[0],
@@ -303,13 +309,13 @@ class Model(object):
                     num_filters = d,
                     num_heads = nh,
                     seq_len = self.c_len,
-                    scope = "R_Encoder",
+                    scope = "Model_Encoder",
                     bias = False,
                     dropout = self.dropout)
                 )
-        with tf.variable_scope("W1_Encoder_Layer"):
-            inputs = tf.concat(attention_output1, axis = -1)
-            self.enc1 = [conv(inputs, d, name = "input_projection")]
+        with tf.variable_scope("Model_Encoder_Layer", reuse = True):
+            input1 = tf.concat(attention_output1, axis = -1)
+            self.enc1 = [conv(input1, d, name = "input_projection")]
             self.enc1[0] = tf.nn.dropout(self.enc1[0], 1.0 - self.dropout)
             self.enc1.append(
                 residual_block(self.enc1[0],
@@ -320,13 +326,13 @@ class Model(object):
                     num_filters = d,
                     num_heads = nh,
                     seq_len = self.c_len,
-                    scope = "W1_Encoder",
+                    scope = "Model_Encoder",
                     bias = False,
                     dropout = self.dropout)
                 )
-        with tf.variable_scope("W2_Encoder_Layer"):
-            inputs = tf.concat(attention_output2, axis = -1)
-            self.enc2 = [conv(inputs, d, name = "input_projection")]
+        with tf.variable_scope("Model_Encoder_Layer", reuse = True):
+            input2 = tf.concat(attention_output2, axis = -1)
+            self.enc2 = [conv(input2, d, name = "input_projection")]
             self.enc2[0] = tf.nn.dropout(self.enc2[0], 1.0 - self.dropout)
             self.enc2.append(
                 residual_block(self.enc2[0],
@@ -337,13 +343,13 @@ class Model(object):
                     num_filters = d,
                     num_heads = nh,
                     seq_len = self.c_len,
-                    scope = "W2_Encoder",
+                    scope = "Model_Encoder",
                     bias = False,
                     dropout = self.dropout)
                 )
-        with tf.variable_scope("W3_Encoder_Layer"):
-            inputs = tf.concat(attention_output3, axis = -1)
-            self.enc3 = [conv(inputs, d, name = "input_projection")]
+        with tf.variable_scope("Model_Encoder_Layer", reuse = True):
+            input3 = tf.concat(attention_output3, axis = -1)
+            self.enc3 = [conv(input3, d, name = "input_projection")]
             self.enc3[0] = tf.nn.dropout(self.enc3[0], 1.0 - self.dropout)
             self.enc3.append(
                 residual_block(self.enc3[0],
@@ -354,24 +360,38 @@ class Model(object):
                     num_filters = d,
                     num_heads = nh,
                     seq_len = self.c_len,
-                    scope = "W3_Encoder",
+                    scope = "Model_Encoder",
                     bias = False,
                     dropout = self.dropout)
                 )
 
         with tf.variable_scope("Output_Layer"):
-            print(self.enc[1])
-            r_loss = tf.losses.cosine_distance(self.enc[1], self.enc0[1], axis = -1, reduction = tf.losses.Reduction.NONE)
-            print(r_loss.get_shape())
-            w1_loss = tf.losses.cosine_distance(self.enc[1], self.enc1[1], axis = -1, reduction = tf.losses.Reduction.NONE)
-            w2_loss = tf.losses.cosine_distance(self.enc[1], self.enc2[1], axis = -1, reduction = tf.losses.Reduction.NONE)
-            w3_loss = tf.losses.cosine_distance(self.enc[1], self.enc3[1], axis = -1, reduction = tf.losses.Reduction.NONE)
-            self.pred_ans = tf.argmin(tf.concat([r_loss, w1_loss, w2_loss, w3_loss],-1),axis = -1)
-            print(tf.concat([r_loss, w1_loss, w2_loss, w3_loss],-1).get_shape())
-            print(self.pred_ans.get_shape())
-            self.loss = tf.reduce_mean(tf.reduce_sum(r_loss) + tf.reduce_sum(w1_loss) + tf.reduce_sum(w2_loss) + tf.reduce_sum(w3_loss))
-            exit()
+            # do self attention
             '''
+            _r = multihead_attention(self.enc[1], d, nh, memory=self.enc0[1], seq_len = self.c_len,
+                bias = False, dropout = self.dropout)
+            _w1 = multihead_attention(self.enc[1], d, nh, memory=self.enc1[1], seq_len = self.c_len,
+                bias = False, dropout = self.dropout, reuse = True)
+            _w2 = multihead_attention(self.enc[1], d, nh, memory=self.enc2[1], seq_len = self.c_len,
+                bias = False, dropout = self.dropout, reuse = True)
+            _w3 = multihead_attention(self.enc[1], d, nh, memory=self.enc3[1], seq_len = self.c_len,
+                bias = False, dropout = self.dropout, reuse = True)
+            '''
+            _q = tf.squeeze(conv(self.enc[1], 1, bias = False, name = "linear"),-1)
+            _r = tf.squeeze(conv(self.enc0[1], 1, bias = False, name = "linear", reuse = True),-1)
+            _w1 = tf.squeeze(conv(self.enc1[1], 1, bias = False, name = "linear", reuse = True),-1)
+            _w2 = tf.squeeze(conv(self.enc2[1], 1, bias = False, name = "linear", reuse = True),-1)
+            _w3 = tf.squeeze(conv(self.enc3[1], 1, bias = False, name = "linear", reuse = True),-1)
+
+            r_loss = tf.losses.cosine_distance(_q, _r, axis = -1, reduction = tf.losses.Reduction.NONE)
+            w1_loss = tf.losses.cosine_distance(_q, _w1, axis = -1, reduction = tf.losses.Reduction.NONE)
+            w2_loss = tf.losses.cosine_distance(_q, _w2, axis = -1, reduction = tf.losses.Reduction.NONE)
+            w3_loss = tf.losses.cosine_distance(_q, _w3, axis = -1, reduction = tf.losses.Reduction.NONE)
+
+            self.loss = tf.reduce_mean(r_loss - w1_loss - w2_loss - w3_loss)
+            self.pred_ans = tf.argmin(tf.stack([r_loss, w1_loss, w2_loss, w3_loss]))
+
+            ''' original
             start_logits = tf.squeeze(conv(tf.concat([self.enc[1], self.enc[2]],axis = -1),1, bias = False, name = "start_pointer"),-1)
             end_logits = tf.squeeze(conv(tf.concat([self.enc[1], self.enc[3]],axis = -1),1, bias = False, name = "end_pointer"), -1)
             self.logits = [mask_logits(start_logits, mask = self.c_mask),

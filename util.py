@@ -46,7 +46,7 @@ def get_record_parser(config, is_test=False):
             features["context_char_idxs"], tf.int32), [para_limit, char_limit])
         ques_char_idxs = tf.reshape(tf.decode_raw(
             features["ques_char_idxs"], tf.int32), [ques_limit, char_limit])
-        y1 = tf.reshape(tf.decode_raw(
+        y1 = tf.reshape(TFRecordDataset.decode_raw(
             features["y1"], tf.float32), [para_limit])
         y2 = tf.reshape(tf.decode_raw(
             features["y2"], tf.float32), [para_limit])
@@ -101,12 +101,10 @@ def evaluate(eval_file, answer_dict):
         total += 1
         ground_truths = eval_file[key]["ans"]
         prediction = value
-        print('gt:',ground_truths)
-        print('pr:',prediction)
-        if ground_truths == prediction:
+        if ground_truths == prediction[0]:
             acc += 1
     acc = 100.0 * acc / total
-    return {'acc': f1}
+    return {'acc': acc}
 
 
 def normalize_answer(s):

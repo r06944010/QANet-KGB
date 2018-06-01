@@ -66,7 +66,7 @@ def layer_norm(x, filters=None, epsilon=1e-6, scope=None, reuse=None):
         result = layer_norm_compute_python(x, epsilon, scale, bias)
         return result
 
-norm_fn = layer_norm#tf.contrib.layers.layer_norm #tf.contrib.layers.layer_norm or noam_norm
+norm_fn = layer_norm #tf.contrib.layers.layer_norm #tf.contrib.layers.layer_norm or noam_norm
 
 def highway(x, size = None, activation = None,
             num_layers = 2, scope = "highway", dropout = 0.0, reuse = None):
@@ -99,7 +99,7 @@ def residual_block(inputs, num_blocks, num_conv_layers, kernel_size, mask = None
         sublayer = 1
         total_sublayers = (num_conv_layers + 2) * num_blocks
         for i in range(num_blocks):
-            outputs = add_timing_signal_1d(outputs)
+            outputs = add_timing_signal_1d(outputs) # position encoding
             outputs, sublayer = conv_block(outputs, num_conv_layers, kernel_size, num_filters,
                 seq_len = seq_len, scope = "encoder_block_%d"%i,reuse = reuse, bias = bias,
                 dropout = dropout, sublayers = (sublayer, total_sublayers))
@@ -188,6 +188,7 @@ def conv(inputs, output_size, bias = None, activation = None, kernel_size = 1, n
             bias_shape = [1,1,1,output_size]
             strides = [1,1,1,1]
         else:
+            # [filter_width, in_channels, out_channels]
             filter_shape = [kernel_size,shapes[-1],output_size]
             bias_shape = [1,1,output_size]
             strides = 1
