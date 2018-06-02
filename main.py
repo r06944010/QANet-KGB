@@ -70,11 +70,12 @@ def train(config):
                         tag="model/loss", simple_value=loss), ])
                     writer.add_summary(loss_sum, global_step)
                 if global_step % config.checkpoint == 0:
+                    print('---eval train---')
                     _, summ = evaluate_batch(
                         model, config.val_num_batches, train_eval_file, sess, "train", handle, train_handle)
                     for s in summ:
                         writer.add_summary(s, global_step)
-
+                    print('---eval dev---')
                     metrics, summ = evaluate_batch(
                         model, dev_total // config.batch_size + 1, dev_eval_file, sess, "dev", handle, dev_handle)
 
@@ -96,6 +97,7 @@ def train(config):
 
 
 def evaluate_batch(model, num_batches, eval_file, sess, data_type, handle, str_handle):
+    print('evaluating batch ...')
     answer_dict = {}
     losses = []
     for _ in tqdm(range(1, num_batches + 1)):

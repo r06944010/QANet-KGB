@@ -164,6 +164,8 @@ def multihead_attention(queries, units, num_heads,
 
         memory = conv(memory, 2 * units, name = "memory_projection", reuse = reuse)
         query = conv(queries, units, name = "query_projection", reuse = reuse)
+
+        #x: a Tensor with shape [..., m] -> a Tensor with shape [..., n, m/n]
         Q = split_last_dimension(query, num_heads)
         K, V = [split_last_dimension(tensor, num_heads) for tensor in tf.split(memory,2,axis = 2)]
 
@@ -534,7 +536,7 @@ def optimized_trilinear_for_attention(args, c_maxlen, q_maxlen, input_keep_prob=
             regularizer=regularizer,
             initializer=kernel_initializer)
         biases = tf.get_variable(
-            "linear_bias", [1],
+            "linear_bias", [50],
             dtype=dtype,
             regularizer=regularizer,
             initializer=bias_initializer)
