@@ -19,41 +19,19 @@ def get_record_parser(config, is_test=False):
                                            features={
                                                "context_idxs": tf.FixedLenFeature([], tf.string),
                                                "ques_idxs": tf.FixedLenFeature([], tf.string),
-                                               #"context_char_idxs": tf.FixedLenFeature([], tf.string),
-                                               #"ques_char_idxs": tf.FixedLenFeature([], tf.string),
-                                               #"y1": tf.FixedLenFeature([], tf.string),
-                                               #"y2": tf.FixedLenFeature([], tf.string),
-                                               "right_idxs": tf.FixedLenFeature([], tf.string),
-                                               "wrong1_idxs": tf.FixedLenFeature([], tf.string),
-                                               "wrong2_idxs": tf.FixedLenFeature([], tf.string),
-                                               "wrong3_idxs": tf.FixedLenFeature([], tf.string),
-                                               "id": tf.FixedLenFeature([], tf.int64)
+                                               "opt_idxs": tf.FixedLenFeature([], tf.string),
+                                               "id": tf.FixedLenFeature([], tf.int64),
+                                               "ans": tf.FixedLenFeature([], tf.int64)
                                            })
         context_idxs = tf.reshape(tf.decode_raw(
             features["context_idxs"], tf.int32), [para_limit])
         ques_idxs = tf.reshape(tf.decode_raw(
             features["ques_idxs"], tf.int32), [ques_limit])
-        right_idxs = tf.reshape(tf.decode_raw(
-            features["right_idxs"], tf.int32), [ans_limit])
-        wrong1_idxs = tf.reshape(tf.decode_raw(
-            features["wrong1_idxs"], tf.int32), [ans_limit])
-        wrong2_idxs = tf.reshape(tf.decode_raw(
-            features["wrong2_idxs"], tf.int32), [ans_limit])
-        wrong3_idxs = tf.reshape(tf.decode_raw(
-            features["wrong3_idxs"], tf.int32), [ans_limit])
-        '''
-        context_char_idxs = tf.reshape(tf.decode_raw(
-            features["context_char_idxs"], tf.int32), [para_limit, char_limit])
-        ques_char_idxs = tf.reshape(tf.decode_raw(
-            features["ques_char_idxs"], tf.int32), [ques_limit, char_limit])
-        y1 = tf.reshape(TFRecordDataset.decode_raw(
-            features["y1"], tf.float32), [para_limit])
-        y2 = tf.reshape(tf.decode_raw(
-            features["y2"], tf.float32), [para_limit])
-        '''
+        opt_idxs = tf.reshape(tf.decode_raw(
+            features["opt_idxs"], tf.int32), [4, ans_limit])
         qa_id = features["id"]
-        # return context_idxs, ques_idxs, context_char_idxs, ques_char_idxs, y1, y2, qa_id
-        return context_idxs, ques_idxs, right_idxs, wrong1_idxs, wrong2_idxs, wrong3_idxs, qa_id
+        ans = features["ans"]
+        return context_idxs, ques_idxs, opt_idxs[0], opt_idxs[1], opt_idxs[2], opt_idxs[3], qa_id, ans
     return parse
 
 
@@ -101,9 +79,10 @@ def evaluate(eval_file, answer_dict):
         total += 1
         ground_truths = eval_file[key]["ans"]
         prediction = value
-        if ground_truths == prediction[0]:
+        if ground_truths == prediction:
             acc += 1
     acc = 100.0 * acc / total
+    print('---accuarcy:---',acc)
     return {'acc': acc}
 
 

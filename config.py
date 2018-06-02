@@ -30,10 +30,12 @@ test_file = os.path.join(home, "corpus", "RACE", "trans1_fixed", "test")
 train_dir = "train_race"
 model_name = "FRC"
 dir_name = os.path.join(train_dir)
+
 if not os.path.exists(train_dir):
     os.mkdir(train_dir)
 if not os.path.exists(os.path.join(os.getcwd(),dir_name)):
     os.mkdir(os.path.join(os.getcwd(),dir_name))
+
 target_dir = "data_race"
 log_dir = os.path.join(dir_name, "event")
 save_dir = os.path.join(dir_name, "model")
@@ -106,7 +108,7 @@ flags.DEFINE_integer("num_threads", 4, "Number of threads in input pipeline")
 flags.DEFINE_boolean("is_bucket", False, "build bucket batch iterator or not")
 flags.DEFINE_list("bucket_range", [40, 401, 40], "the range of bucket")
 
-flags.DEFINE_integer("batch_size", 32, "Batch size")
+flags.DEFINE_integer("batch_size", 8, "Batch size")
 flags.DEFINE_integer("num_steps", 60000, "Number of steps")
 flags.DEFINE_integer("checkpoint", 1000, "checkpoint to save and evaluate the model")
 flags.DEFINE_integer("period", 100, "period to save batch loss")
@@ -154,6 +156,7 @@ def main(_):
         config.val_num_batches = 1
         config.checkpoint = 1
         config.period = 1
+        config.batch_size = 2
         train(config)
     elif config.mode == "test":
         test(config)

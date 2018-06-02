@@ -39,7 +39,8 @@ def process_file(filename, data_type, word_counter, char_counter):
     total = 0
 
     for path, directories, files in os.walk(filename):
-        for f in files:
+        for f in tqdm(files):
+            # print(os.path.join(path, f))
             fh = open(os.path.join(path, f), "r") if f.endswith('.txt') else None
             if fh == None:
                 continue
@@ -56,15 +57,12 @@ def process_file(filename, data_type, word_counter, char_counter):
 
                 l = ['A','B','C','D']
                 ans = [x for x in range(4) if l[x]==ans][0] # 0123
-                right_ans = opt[ans]
-                wrong_ans = [opt[x] for x in range(len(opt)) if x != ans]
 
                 ques_tokens = word_tokenize(ques)
-                ra_tokens = word_tokenize(right_ans) # right answer
-                wa_tokens = [word_tokenize(wrong_ans[x]) for x in range(3)]  # wrong answer
+                opt_tokens = [word_tokenize(opt[x]) for x in range(4)]  # wrong answer
 
                 example = {"context_tokens": context_tokens, "ques_tokens": ques_tokens,
-                           "right": ra_tokens, "wrong": wa_tokens, "id": total, "ans": ans}
+                           "options": opt_tokens, "id": total, "ans": ans}
                 examples.append(example)
                 eval_examples[str(total)] = {"context": article, "ans": ans, "uuid": source["id"]}
     random.shuffle(examples)
@@ -180,10 +178,10 @@ def build_features(config, examples, data_type, out_file, word2idx_dict, char2id
     def filter_func(example, is_test=False):
         return len(example["context_tokens"]) > para_limit or \
                len(example["ques_tokens"]) > ques_limit or \
-               len(example["right"]) > ans_limit or \
-               len(example["wrong"][0]) > ans_limit or \
-               len(example["wrong"][1]) > ans_limit or \
-               len(example["wrong"][2]) > ans_limit
+               len(example["options"][3]) > ans_limit or \
+               len(example["options"][0]) > ans_limit or \
+               len(example["options"][1]) > ans_limit or \
+               len(example["options"][2]) > ans_limit
 
     print("Processing {} examples...".format(data_type))
     writer = tf.python_io.TFRecordWriter(out_file)
@@ -201,8 +199,7 @@ def build_features(config, examples, data_type, out_file, word2idx_dict, char2id
         # context_char_idxs = np.zeros([para_limit, char_limit], dtype=np.int32)
         ques_idxs = np.zeros([ques_limit], dtype=np.int32)
         # ques_char_idxs = np.zeros([ques_limit, char_limit], dtype=np.int32)
-        right_idxs = np.zeros([ans_limit], dtype=np.int32)
-        wrong_idxs = np.zeros([3, ans_limit], dtype=np.float32)
+        opt_idxs = np.zeros([4, ans_limit], dtype=np.float32)
 
         def _get_word(word):
             return word2idx_dict[word] if word in word2idx_dict else 1
@@ -214,21 +211,16 @@ def build_features(config, examples, data_type, out_file, word2idx_dict, char2id
         for i, token in enumerate(example["ques_tokens"]):
             ques_idxs[i] = _get_word(token)
 
-        for i, token in enumerate(example["right"]):
-            right_idxs[i] = _get_word(token)
-
-        for k in range(3):
-            for i, token in enumerate(example["wrong"][k]):
-                wrong_idxs[k][i] = _get_word(token)
+        for k in range(4):
+            for i, token in enumerate(example["options"][k]):
+                opt_idxs[k][i] = _get_word(token)
 
         record = tf.train.Example(features=tf.train.Features(feature={
                                   "context_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[context_idxs.tostring()])),
                                   "ques_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[ques_idxs.tostring()])),
-                                  "right_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[right_idxs.tostring()])),
-                                  "wrong1_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[wrong_idxs[0].tostring()])),
-                                  "wrong2_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[wrong_idxs[1].tostring()])),
-                                  "wrong3_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[wrong_idxs[2].tostring()])),
-                                  "id": tf.train.Feature(int64_list=tf.train.Int64List(value=[example["id"]]))
+                                  "opt_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[opt_idxs.tostring()])),
+                                  "id": tf.train.Feature(int64_list=tf.train.Int64List(value=[example["id"]])),
+                                  "ans": tf.train.Feature(int64_list=tf.train.Int64List(value=[example["ans"]])),
                                   }))
         writer.write(record.SerializeToString())
     print("Built {} / {} instances of features in total".format(total, total_))
