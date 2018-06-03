@@ -171,8 +171,8 @@ def test(config):
                     eval_file, qa_id.tolist(), pred_ans)
                 answer_dict.update(answer_dict_)
             with open('pred_tocfl.csv', 'w') as f:
-                writer = csv.writer(f)
-                writer.writerows(['idx','ans'])
+                s = csv.writer(f,delimiter=',',lineterminator='\n')
+                s.writerow(['idx','ans'])
                 for i in range(1,321):
-                    writer.writerows([i,answer_dict[i]])
+                    s.writerow([i,answer_dict[i]])
 
