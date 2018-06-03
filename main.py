@@ -134,8 +134,9 @@ def demo(config):
 def test(config):
     with open(config.word_emb_file, "r") as fh:
         word_mat = np.array(json.load(fh), dtype=np.float32)
-    with open(config.char_emb_file, "r") as fh:
-        char_mat = np.array(json.load(fh), dtype=np.float32)
+    char_mat = None
+    #with open(config.char_emb_file, "r") as fh:
+    #    char_mat = np.array(json.load(fh), dtype=np.float32)
     with open(config.test_eval_file, "r") as fh:
         eval_file = json.load(fh)
     with open(config.test_meta, "r") as fh:
