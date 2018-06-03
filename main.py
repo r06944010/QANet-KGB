@@ -174,5 +174,5 @@ def test(config):
                 s = csv.writer(f,delimiter=',',lineterminator='\n')
                 s.writerow(['idx','ans'])
                 for i in range(1,321):
-                    s.writerow([i,answer_dict[i]])
+                    s.writerow([i,answer_dict[str(i)]])
 
