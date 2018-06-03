@@ -173,6 +173,7 @@ def test(config):
             with open('pred_tocfl.csv', 'w') as f:
                 s = csv.writer(f,delimiter=',',lineterminator='\n')
                 s.writerow(['idx','ans'])
-                for i in range(1,321):
-                    s.writerow([i,answer_dict[str(i)]])
+                l = ['A','B','C','D']
+                for i in range(1,321):  
+                    s.writerow([i,l[answer_dict[str(i)]]])
 
