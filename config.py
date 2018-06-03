@@ -6,7 +6,7 @@ This file is taken and modified from R-Net by HKUST-KnowComp
 https://github.com/HKUST-KnowComp/R-Net
 '''
 
-from prepro_race import prepro
+from prepro_tocfl import prepro
 from main import train, test, demo
 
 flags = tf.flags
@@ -22,10 +22,18 @@ glove_word_file = os.path.join(home, "corpus", "glove", "glove.840B.300d.txt")
 '''
 
 ### RACE
+'''
+target_dir = "data_race"
 train_file = os.path.join(home, "corpus", "RACE", "trans1_fixed", "train")
 dev_file = os.path.join(home, "corpus", "RACE", "trans1_fixed", "dev")
 test_file = os.path.join(home, "corpus", "RACE", "trans1_fixed", "test")
+'''
 
+### TOCFL
+target_dir = "data_tocfl"
+train_file = None
+dev_file = None
+test_file = os.path.join(home, "corpus", "tocfl", "transcription.csv")
 
 train_dir = "train_race"
 model_name = "FRC"
@@ -36,7 +44,6 @@ if not os.path.exists(train_dir):
 if not os.path.exists(os.path.join(os.getcwd(),dir_name)):
     os.mkdir(os.path.join(os.getcwd(),dir_name))
 
-target_dir = "data_race"
 log_dir = os.path.join(dir_name, "event")
 save_dir = os.path.join(dir_name, "model")
 answer_dir = os.path.join(dir_name, "answer")
@@ -159,6 +166,7 @@ def main(_):
         config.batch_size = 2
         train(config)
     elif config.mode == "test":
+        
         test(config)
     elif config.mode == "demo":
         demo(config)

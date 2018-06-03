@@ -3,6 +3,7 @@ import ujson as json
 import numpy as np
 from tqdm import tqdm
 import os
+import csv
 
 '''
 This file is taken and modified from R-Net by HKUST-KnowComp
@@ -162,16 +163,14 @@ def test(config):
             answer_dict = {}
             remapped_dict = {}
             for step in tqdm(range(total // config.batch_size + 1)):
-                qa_id, loss, yp1, yp2 = sess.run(
-                    [model.qa_id, model.loss, model.yp1, model.yp2])
-                answer_dict_, remapped_dict_ = convert_tokens(
-                    eval_file, qa_id.tolist(), yp1.tolist(), yp2.tolist())
+                qa_id, pred_ans = sess.run(
+                    [model.qa_id, model.pred_ans])
+                answer_dict_, _ = convert_tokens(
+                    eval_file, qa_id.tolist(), pred_ans)
                 answer_dict.update(answer_dict_)
-                remapped_dict.update(remapped_dict_)
-                losses.append(loss)
-            loss = np.mean(losses)
-            metrics = evaluate(eval_file, answer_dict)
-            with open(config.answer_file, "w") as fh:
-                json.dump(remapped_dict, fh)
-            print("Exact Match: {}, F1: {}".format(
-                metrics['exact_match'], metrics['f1']))
+            with open('pred_tocfl.csv', 'w') as f:
+                writer = csv.writer(f)
+                writer.writerows(['idx','ans'])
+                for i in range(1,321):
+                    writer.writerows([i,answer_dict[i]])
+
