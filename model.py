@@ -41,8 +41,8 @@ class Model(object):
 
             if opt:
                 N, CL = config.batch_size if not self.demo else 1, config.char_limit
-                # self.c_maxlen = tf.reduce_max(self.c_len)
-                # self.q_maxlen = tf.reduce_max(self.q_len)
+                #self.c_maxlen = tf.reduce_max(self.c_len)
+                #self.q_maxlen = tf.reduce_max(self.q_len)
                 # set maxlen to constant
                 self.c_maxlen = 400
                 self.q_maxlen = 50
@@ -52,7 +52,7 @@ class Model(object):
                 self.c_mask = tf.slice(self.c_mask, [0, 0], [N, self.c_maxlen])
                 self.q_mask = tf.slice(self.q_mask, [0, 0], [N, self.q_maxlen])
 
-                # self.opt_maxlen = tf.reduce_max(tf.concat([self.o1_len, self.o2_len, self.o3_len, self.o4_len], 0))
+                #self.opt_maxlen = tf.reduce_max(tf.concat([self.o1_len, self.o2_len, self.o3_len, self.o4_len], 0))
                 self.opt_maxlen = 50
                 self.o1 = tf.slice(self.o1, [0, 0], [N, self.opt_maxlen])
                 self.o2 = tf.slice(self.o2, [0, 0], [N, self.opt_maxlen])
@@ -104,8 +104,8 @@ class Model(object):
             o3_emb = highway(o3_emb, size = d, scope = "highway", dropout = self.dropout, reuse = True)
             o4_emb = highway(o4_emb, size = d, scope = "highway", dropout = self.dropout, reuse = True)
 
-        with tf.variable_scope("Embedding_Encoder_Layer") as scope:
-            scope.reuse_variables()
+        with tf.variable_scope("Embedding_Encoder_Layer", reuse = tf.AUTO_REUSE) as scope:
+            # scope.reuse_variables()
             c = residual_block(c_emb,
                 num_blocks = 1,
                 num_conv_layers = 4,
@@ -181,7 +181,7 @@ class Model(object):
         with tf.variable_scope("Context_to_Query_Attention_Layer", reuse=tf.AUTO_REUSE) as scope:
             scope.reuse_variables()
             
-            def some_op(c=c, q=q, c_maxlen=c_maxlen, q_maxlen=q_maxlen, q_mask=q_mask, c_mask=c_mask):
+            def some_op(c=c, q=q, c_maxlen=self.c_maxlen, q_maxlen=self.q_maxlen, q_mask=self.q_mask, c_mask=self.c_mask):
                 S = optimized_trilinear_for_attention([c, q], c_maxlen, q_maxlen, input_keep_prob = 1.0 - self.dropout)
                 mask_q = tf.expand_dims(q_mask, 1)
                 S_ = tf.nn.softmax(mask_logits(S, mask = mask_q))
@@ -234,7 +234,9 @@ class Model(object):
             attention_output3 = [c, self.c2o4, c * self.c2o4, c * self.o42c]
 
         with tf.variable_scope("Model_Encoder_Layer", reuse = tf.AUTO_REUSE) as scope:
-            scope.reuse_variables()
+            # scope.reuse_variables()
+            # attention_outputs : (N,?,96),(N,?,96),(N,?,96),(N,?,96)
+            # inputs = (N,?,384)
             inputs = tf.concat(attention_outputs, axis = -1)
             self.enc = [conv(inputs, d, name = "input_projection")]
             for i in range(1):
@@ -328,7 +330,7 @@ class Model(object):
                 )
 
         with tf.variable_scope("Output_Layer") as scope:
-            scope.reuse_variables()
+            # scope.reuse_variables()
 
             # do self attention
             '''
@@ -341,19 +343,19 @@ class Model(object):
             _w3 = multihead_attention(self.enc[1], d, nh, memory=self.enc3[1], seq_len = self.c_len,
                 bias = False, dropout = self.dropout, reuse = True)
             '''
-            _q = tf.squeeze(conv(self.enc[1], 1, bias = False, name = "linear"),-1)
+            _q  = tf.squeeze(conv(self.enc[1] , 1, bias = False, name = "linear"),-1)
             _o1 = tf.squeeze(conv(self.enc0[1], 1, bias = False, name = "linear", reuse = True),-1)
             _o2 = tf.squeeze(conv(self.enc1[1], 1, bias = False, name = "linear", reuse = True),-1)
             _o3 = tf.squeeze(conv(self.enc2[1], 1, bias = False, name = "linear", reuse = True),-1)
             _o4 = tf.squeeze(conv(self.enc3[1], 1, bias = False, name = "linear", reuse = True),-1)
 
-            _q = tf.layers.dense(inputs=_q, units=1024, activation=tf.nn.leaky_relu, name='linear2', reuse=tf.AUTO_REUSE)
+            _q  = tf.layers.dense(inputs=_q , units=1024, activation=tf.nn.leaky_relu, name='linear2', reuse=tf.AUTO_REUSE)
             _o1 = tf.layers.dense(inputs=_o1, units=1024, activation=tf.nn.leaky_relu, name='linear2', reuse=tf.AUTO_REUSE)
             _o2 = tf.layers.dense(inputs=_o2, units=1024, activation=tf.nn.leaky_relu, name='linear2', reuse=tf.AUTO_REUSE)
             _o3 = tf.layers.dense(inputs=_o3, units=1024, activation=tf.nn.leaky_relu, name='linear2', reuse=tf.AUTO_REUSE)
             _o4 = tf.layers.dense(inputs=_o4, units=1024, activation=tf.nn.leaky_relu, name='linear2', reuse=tf.AUTO_REUSE)
 
-            _q = tf.layers.dense(inputs=_q, units=64, activation=None, name='linear3', reuse=tf.AUTO_REUSE)
+            _q  = tf.layers.dense(inputs=_q , units=64, activation=None, name='linear3', reuse=tf.AUTO_REUSE)
             _o1 = tf.layers.dense(inputs=_o1, units=64, activation=None, name='linear3', reuse=tf.AUTO_REUSE)
             _o2 = tf.layers.dense(inputs=_o2, units=64, activation=None, name='linear3', reuse=tf.AUTO_REUSE)
             _o3 = tf.layers.dense(inputs=_o3, units=64, activation=None, name='linear3', reuse=tf.AUTO_REUSE)

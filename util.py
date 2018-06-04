@@ -82,7 +82,7 @@ def evaluate(eval_file, answer_dict):
         if ground_truths == prediction:
             acc += 1
     acc = 100.0 * acc / total
-    print('---accuarcy:---',acc)
+    # print('---accuarcy:---',acc)
     return {'acc': acc}
 
 

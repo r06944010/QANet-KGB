@@ -212,7 +212,7 @@ def conv(inputs, output_size, bias = None, activation = None, kernel_size = 1, n
             return outputs
 
 def mask_logits(inputs, mask, mask_value = -1e30):
-    shapes = inputs.shape.as_list()
+    # shapes = inputs.shape.as_list()
     mask = tf.cast(mask, tf.float32)
     return inputs + mask_value * (1 - mask)
 
@@ -520,7 +520,8 @@ def optimized_trilinear_for_attention(args, c_maxlen, q_maxlen, input_keep_prob=
     arg_size = arg0_shape[2]
     dtype = args[0].dtype
     droped_args = [tf.nn.dropout(arg, input_keep_prob) for arg in args]
-    with tf.variable_scope(scope):
+
+    with tf.variable_scope(scope, reuse = reuse):
         weights4arg0 = tf.get_variable(
             "linear_kernel4arg0", [arg_size, 1],
             dtype=dtype,
