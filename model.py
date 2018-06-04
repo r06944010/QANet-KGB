@@ -104,7 +104,7 @@ class Model(object):
             o3_emb = highway(o3_emb, size = d, scope = "highway", dropout = self.dropout, reuse = True)
             o4_emb = highway(o4_emb, size = d, scope = "highway", dropout = self.dropout, reuse = True)
 
-        with tf.variable_scope("Embedding_Encoder_Layer"):
+        with tf.variable_scope("Embedding_Encoder_Layer") as scope:
             scope.reuse_variables()
             c = residual_block(c_emb,
                 num_blocks = 1,
