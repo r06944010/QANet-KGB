@@ -105,6 +105,7 @@ class Model(object):
             o4_emb = highway(o4_emb, size = d, scope = "highway", dropout = self.dropout, reuse = True)
 
         with tf.variable_scope("Embedding_Encoder_Layer"):
+            scope.reuse_variables()
             c = residual_block(c_emb,
                 num_blocks = 1,
                 num_conv_layers = 4,
@@ -178,6 +179,8 @@ class Model(object):
                 dropout = self.dropout)
 
         with tf.variable_scope("Context_to_Query_Attention_Layer", reuse=tf.AUTO_REUSE):
+            scope.reuse_variables()
+            
             S = optimized_trilinear_for_attention([c, q], self.c_maxlen, self.q_maxlen, input_keep_prob = 1.0 - self.dropout)
             mask_q = tf.expand_dims(self.q_mask, 1)
             S_ = tf.nn.softmax(mask_logits(S, mask = mask_q))
@@ -220,6 +223,7 @@ class Model(object):
             attention_output3 = [c, self.c2o4, c * self.c2o4, c * self.o42c]
 
         with tf.variable_scope("Model_Encoder_Layer", reuse = tf.AUTO_REUSE):
+            scope.reuse_variables()
             inputs = tf.concat(attention_outputs, axis = -1)
             self.enc = [conv(inputs, d, name = "input_projection")]
             for i in range(1):
@@ -309,6 +313,8 @@ class Model(object):
                 )
 
         with tf.variable_scope("Output_Layer"):
+            scope.reuse_variables()
+
             # do self attention
             '''
             _r = multihead_attention(self.enc[1], d, nh, memory=self.enc0[1], seq_len = self.c_len,

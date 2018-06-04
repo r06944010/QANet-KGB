@@ -22,18 +22,18 @@ glove_word_file = os.path.join(home, "corpus", "glove", "glove.840B.300d.txt")
 '''
 
 ### RACE
-'''
+
 target_dir = "data_race"
 train_file = os.path.join(home, "corpus", "RACE", "trans1_fixed", "train")
 dev_file = os.path.join(home, "corpus", "RACE", "trans1_fixed", "dev")
 test_file = os.path.join(home, "corpus", "RACE", "trans1_fixed", "test")
-'''
+
 
 ### TOCFL
-target_dir = "data_tocfl"
-train_file = None
-dev_file = None
-test_file = os.path.join(home, "corpus", "tocfl", "transcription.csv")
+# target_dir = "data_tocfl"
+# train_file = None
+# dev_file = None
+# test_file = os.path.join(home, "corpus", "tocfl", "transcription.csv")
 
 train_dir = "train_race"
 model_name = "FRC"
