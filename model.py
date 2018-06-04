@@ -178,9 +178,20 @@ class Model(object):
                 bias = False,
                 dropout = self.dropout)
 
-        with tf.variable_scope("Context_to_Query_Attention_Layer", reuse=tf.AUTO_REUSE):
+        with tf.variable_scope("Context_to_Query_Attention_Layer", reuse=tf.AUTO_REUSE) as scope:
             scope.reuse_variables()
             
+            def some_op(c=c, q=q, c_maxlen=c_maxlen, q_maxlen=q_maxlen, q_mask=q_mask, c_mask=c_mask):
+                S = optimized_trilinear_for_attention([c, q], c_maxlen, q_maxlen, input_keep_prob = 1.0 - self.dropout)
+                mask_q = tf.expand_dims(q_mask, 1)
+                S_ = tf.nn.softmax(mask_logits(S, mask = mask_q))
+                mask_c = tf.expand_dims(c_mask, 2)
+                S_T = tf.transpose(tf.nn.softmax(mask_logits(S, mask = mask_c), axis= 1),(0,2,1))
+                c2q = tf.matmul(S_, q)
+                q2c = tf.matmul(tf.matmul(S_, S_T), c)
+                attention_outputs = [c, c2q, c * c2q, c * q2c]
+                return attention_outputs
+
             S = optimized_trilinear_for_attention([c, q], self.c_maxlen, self.q_maxlen, input_keep_prob = 1.0 - self.dropout)
             mask_q = tf.expand_dims(self.q_mask, 1)
             S_ = tf.nn.softmax(mask_logits(S, mask = mask_q))
@@ -222,7 +233,7 @@ class Model(object):
             self.o42c = tf.matmul(tf.matmul(S_, S_T), c)
             attention_output3 = [c, self.c2o4, c * self.c2o4, c * self.o42c]
 
-        with tf.variable_scope("Model_Encoder_Layer", reuse = tf.AUTO_REUSE):
+        with tf.variable_scope("Model_Encoder_Layer", reuse = tf.AUTO_REUSE) as scope:
             scope.reuse_variables()
             inputs = tf.concat(attention_outputs, axis = -1)
             self.enc = [conv(inputs, d, name = "input_projection")]
@@ -258,6 +269,7 @@ class Model(object):
                     seq_len = self.c_len,
                     scope = "Model_Encoder",
                     bias = False,
+                    reuse = True,
                     dropout = self.dropout)
                 )
 
@@ -275,6 +287,7 @@ class Model(object):
                     seq_len = self.c_len,
                     scope = "Model_Encoder",
                     bias = False,
+                    reuse = True,
                     dropout = self.dropout)
                 )
 
@@ -292,6 +305,7 @@ class Model(object):
                     seq_len = self.c_len,
                     scope = "Model_Encoder",
                     bias = False,
+                    reuse = True,
                     dropout = self.dropout)
                 )
 
@@ -309,10 +323,11 @@ class Model(object):
                     seq_len = self.c_len,
                     scope = "Model_Encoder",
                     bias = False,
+                    reuse = True,
                     dropout = self.dropout)
                 )
 
-        with tf.variable_scope("Output_Layer"):
+        with tf.variable_scope("Output_Layer") as scope:
             scope.reuse_variables()
 
             # do self attention
@@ -344,10 +359,10 @@ class Model(object):
             _o3 = tf.layers.dense(inputs=_o3, units=64, activation=None, name='linear3', reuse=tf.AUTO_REUSE)
             _o4 = tf.layers.dense(inputs=_o4, units=64, activation=None, name='linear3', reuse=tf.AUTO_REUSE)
 
-            o1_loss = tf.losses.cosine_distance(_q, _o1, axis = -1, reduction = tf.losses.Reduction.NONE)
-            o2_loss = tf.losses.cosine_distance(_q, _o2, axis = -1, reduction = tf.losses.Reduction.NONE)
-            o3_loss = tf.losses.cosine_distance(_q, _o3, axis = -1, reduction = tf.losses.Reduction.NONE)
-            o4_loss = tf.losses.cosine_distance(_q, _o4, axis = -1, reduction = tf.losses.Reduction.NONE)
+            o1_loss = tf.losses.cosine_distance(tf.nn.l2_normalize(_q, axis = -1), tf.nn.l2_normalize(_o1, axis = -1), axis = -1, reduction = tf.losses.Reduction.NONE)
+            o2_loss = tf.losses.cosine_distance(tf.nn.l2_normalize(_q, axis = -1), tf.nn.l2_normalize(_o2, axis = -1), axis = -1, reduction = tf.losses.Reduction.NONE)
+            o3_loss = tf.losses.cosine_distance(tf.nn.l2_normalize(_q, axis = -1), tf.nn.l2_normalize(_o3, axis = -1), axis = -1, reduction = tf.losses.Reduction.NONE)
+            o4_loss = tf.losses.cosine_distance(tf.nn.l2_normalize(_q, axis = -1), tf.nn.l2_normalize(_o4, axis = -1), axis = -1, reduction = tf.losses.Reduction.NONE)
 
             _logits = tf.concat([o1_loss, o2_loss, o3_loss, o4_loss], axis = 1)
 

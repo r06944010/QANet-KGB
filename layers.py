@@ -508,7 +508,8 @@ def batch_dot(x, y, axes=None):
 def optimized_trilinear_for_attention(args, c_maxlen, q_maxlen, input_keep_prob=1.0,
     scope='efficient_trilinear',
     bias_initializer=tf.zeros_initializer(),
-    kernel_initializer=initializer()):
+    kernel_initializer=initializer(),
+    reuse=tf.AUTO_REUSE):
     assert len(args) == 2, "just use for computing attention with two input"
     arg0_shape = args[0].get_shape().as_list()
     arg1_shape = args[1].get_shape().as_list()
