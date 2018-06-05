@@ -114,7 +114,7 @@ class Model(object):
                 num_filters = d,
                 num_heads = nh,
                 seq_len = self.c_len,
-                scope = "Encoder_Residual_Block",
+                scope = "Encoder_Residual_Block_c",
                 bias = False,
                 dropout = self.dropout)
             q = residual_block(q_emb,
@@ -125,8 +125,8 @@ class Model(object):
                 num_filters = d,
                 num_heads = nh,
                 seq_len = self.q_len,
-                scope = "Encoder_Residual_Block",
-                reuse = True, # Share the weights between passage and question
+                scope = "Encoder_Residual_Block_q",
+                # reuse = True, # Share the weights between passage and question
                 bias = False,
                 dropout = self.dropout)
             o1 = residual_block(o1_emb,
@@ -137,8 +137,8 @@ class Model(object):
                 num_filters = d,
                 num_heads = nh,
                 seq_len = self.o1_len,
-                scope = "Encoder_Residual_Block",
-                reuse = True, # Share the weights between passage and question
+                scope = "Encoder_Residual_Block_o",
+                reuse = tf.AUTO_REUSE, # Share the weights between passage and question
                 bias = False,
                 dropout = self.dropout)
             o2 = residual_block(o2_emb,
@@ -149,8 +149,8 @@ class Model(object):
                 num_filters = d,
                 num_heads = nh,
                 seq_len = self.o2_len,
-                scope = "Encoder_Residual_Block",
-                reuse = True, # Share the weights between passage and question
+                scope = "Encoder_Residual_Block_o",
+                reuse = tf.AUTO_REUSE, # Share the weights between passage and question
                 bias = False,
                 dropout = self.dropout)
             o3 = residual_block(o3_emb,
@@ -161,8 +161,8 @@ class Model(object):
                 num_filters = d,
                 num_heads = nh,
                 seq_len = self.o3_len,
-                scope = "Encoder_Residual_Block",
-                reuse = True, # Share the weights between passage and question
+                scope = "Encoder_Residual_Block_o",
+                reuse = tf.AUTO_REUSE, # Share the weights between passage and question
                 bias = False,
                 dropout = self.dropout)
             o4 = residual_block(o4_emb,
@@ -173,8 +173,8 @@ class Model(object):
                 num_filters = d,
                 num_heads = nh,
                 seq_len = self.o4_len,
-                scope = "Encoder_Residual_Block",
-                reuse = True, # Share the weights between passage and question
+                scope = "Encoder_Residual_Block_o",
+                reuse = tf.AUTO_REUSE, # Share the weights between passage and question
                 bias = False,
                 dropout = self.dropout)
 
@@ -200,7 +200,8 @@ class Model(object):
             self.c2q = tf.matmul(S_, q)
             self.q2c = tf.matmul(tf.matmul(S_, S_T), c)
             attention_outputs = [c, self.c2q, c * self.c2q, c * self.q2c]
-
+        
+        with tf.variable_scope("Context_to_Option_Attention_Layer", reuse=tf.AUTO_REUSE):
             S = optimized_trilinear_for_attention([c, o1], self.c_maxlen, self.opt_maxlen, input_keep_prob = 1.0 - self.dropout)
             mask_o1 = tf.expand_dims(self.o1_mask, 1)
             S_ = tf.nn.softmax(mask_logits(S, mask = mask_o1))
@@ -257,6 +258,7 @@ class Model(object):
                         dropout = self.dropout)
                     )
 
+        with tf.variable_scope("Model_Encoder_Layer_Opt", reuse = tf.AUTO_REUSE) as scope:
             input0 = tf.concat(attention_output0, axis = -1)
             self.enc0 = [conv(input0, d, name = "input_projection")]
             self.enc0[0] = tf.nn.dropout(self.enc0[0], 1.0 - self.dropout)
@@ -271,7 +273,7 @@ class Model(object):
                     seq_len = self.c_len,
                     scope = "Model_Encoder",
                     bias = False,
-                    reuse = True,
+                    reuse = tf.AUTO_REUSE,
                     dropout = self.dropout)
                 )
 
@@ -343,23 +345,23 @@ class Model(object):
             _w3 = multihead_attention(self.enc[1], d, nh, memory=self.enc3[1], seq_len = self.c_len,
                 bias = False, dropout = self.dropout, reuse = True)
             '''
-            _q  = tf.squeeze(conv(self.enc[1] , 1, bias = False, name = "linear"),-1)
-            _o1 = tf.squeeze(conv(self.enc0[1], 1, bias = False, name = "linear", reuse = True),-1)
-            _o2 = tf.squeeze(conv(self.enc1[1], 1, bias = False, name = "linear", reuse = True),-1)
-            _o3 = tf.squeeze(conv(self.enc2[1], 1, bias = False, name = "linear", reuse = True),-1)
-            _o4 = tf.squeeze(conv(self.enc3[1], 1, bias = False, name = "linear", reuse = True),-1)
+            _q  = tf.squeeze(conv(self.enc[1] , 1, bias = False, name = "linear_q"),-1)
+            _o1 = tf.squeeze(conv(self.enc0[1], 1, bias = False, name = "linear_o"),-1)
+            _o2 = tf.squeeze(conv(self.enc1[1], 1, bias = False, name = "linear_o", reuse = True),-1)
+            _o3 = tf.squeeze(conv(self.enc2[1], 1, bias = False, name = "linear_o", reuse = True),-1)
+            _o4 = tf.squeeze(conv(self.enc3[1], 1, bias = False, name = "linear_o", reuse = True),-1)
 
-            _q  = tf.layers.dense(inputs=_q , units=1024, activation=tf.nn.leaky_relu, name='linear2', reuse=tf.AUTO_REUSE)
-            _o1 = tf.layers.dense(inputs=_o1, units=1024, activation=tf.nn.leaky_relu, name='linear2', reuse=tf.AUTO_REUSE)
-            _o2 = tf.layers.dense(inputs=_o2, units=1024, activation=tf.nn.leaky_relu, name='linear2', reuse=tf.AUTO_REUSE)
-            _o3 = tf.layers.dense(inputs=_o3, units=1024, activation=tf.nn.leaky_relu, name='linear2', reuse=tf.AUTO_REUSE)
-            _o4 = tf.layers.dense(inputs=_o4, units=1024, activation=tf.nn.leaky_relu, name='linear2', reuse=tf.AUTO_REUSE)
+            _q  = tf.layers.dense(inputs=_q , units=1024, activation=tf.nn.leaky_relu, name='linear2_q', reuse=tf.AUTO_REUSE)
+            _o1 = tf.layers.dense(inputs=_o1, units=1024, activation=tf.nn.leaky_relu, name='linear2_o', reuse=tf.AUTO_REUSE)
+            _o2 = tf.layers.dense(inputs=_o2, units=1024, activation=tf.nn.leaky_relu, name='linear2_o', reuse=tf.AUTO_REUSE)
+            _o3 = tf.layers.dense(inputs=_o3, units=1024, activation=tf.nn.leaky_relu, name='linear2_o', reuse=tf.AUTO_REUSE)
+            _o4 = tf.layers.dense(inputs=_o4, units=1024, activation=tf.nn.leaky_relu, name='linear2_o', reuse=tf.AUTO_REUSE)
 
-            _q  = tf.layers.dense(inputs=_q , units=64, activation=None, name='linear3', reuse=tf.AUTO_REUSE)
-            _o1 = tf.layers.dense(inputs=_o1, units=64, activation=None, name='linear3', reuse=tf.AUTO_REUSE)
-            _o2 = tf.layers.dense(inputs=_o2, units=64, activation=None, name='linear3', reuse=tf.AUTO_REUSE)
-            _o3 = tf.layers.dense(inputs=_o3, units=64, activation=None, name='linear3', reuse=tf.AUTO_REUSE)
-            _o4 = tf.layers.dense(inputs=_o4, units=64, activation=None, name='linear3', reuse=tf.AUTO_REUSE)
+            _q  = tf.layers.dense(inputs=_q , units=64, activation=None, name='linear3_q', reuse=tf.AUTO_REUSE)
+            _o1 = tf.layers.dense(inputs=_o1, units=64, activation=None, name='linear3_o', reuse=tf.AUTO_REUSE)
+            _o2 = tf.layers.dense(inputs=_o2, units=64, activation=None, name='linear3_o', reuse=tf.AUTO_REUSE)
+            _o3 = tf.layers.dense(inputs=_o3, units=64, activation=None, name='linear3_o', reuse=tf.AUTO_REUSE)
+            _o4 = tf.layers.dense(inputs=_o4, units=64, activation=None, name='linear3_o', reuse=tf.AUTO_REUSE)
 
             o1_loss = tf.losses.cosine_distance(tf.nn.l2_normalize(_q, axis = -1), tf.nn.l2_normalize(_o1, axis = -1), axis = -1, reduction = tf.losses.Reduction.NONE)
             o2_loss = tf.losses.cosine_distance(tf.nn.l2_normalize(_q, axis = -1), tf.nn.l2_normalize(_o2, axis = -1), axis = -1, reduction = tf.losses.Reduction.NONE)
