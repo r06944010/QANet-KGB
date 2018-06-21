@@ -345,6 +345,22 @@ class Model(object):
             _w3 = multihead_attention(self.enc[1], d, nh, memory=self.enc3[1], seq_len = self.c_len,
                 bias = False, dropout = self.dropout, reuse = True)
             '''
+
+            lstm_cell = tf.contrib.rnn.BasicLSTMCell(128, forget_bias=1.0, state_is_tuple=True)
+            init_state = lstm_cell.zero_state(N, dtype=tf.float32)
+            outputs, final_state_q = tf.nn.dynamic_rnn(lstm_cell, self.enc[1], initial_state=init_state, time_major=False)
+            outputs, final_state_o1 = tf.nn.dynamic_rnn(lstm_cell, self.enc0[1], initial_state=init_state, time_major=False)
+            outputs, final_state_o2 = tf.nn.dynamic_rnn(lstm_cell, self.enc1[1], initial_state=init_state, time_major=False)
+            outputs, final_state_o3 = tf.nn.dynamic_rnn(lstm_cell, self.enc2[1], initial_state=init_state, time_major=False)
+            outputs, final_state_o4 = tf.nn.dynamic_rnn(lstm_cell, self.enc3[1], initial_state=init_state, time_major=False)
+
+            _q = final_state_q[1]
+            _o1 = final_state_o1[1]
+            _o2 = final_state_o2[1]
+            _o3 = final_state_o3[1]
+            _o4 = final_state_o4[1]
+
+            '''
             _q  = tf.squeeze(conv(self.enc[1] , 1, bias = False, name = "linear_q"),-1)
             _o1 = tf.squeeze(conv(self.enc0[1], 1, bias = False, name = "linear_o"),-1)
             _o2 = tf.squeeze(conv(self.enc1[1], 1, bias = False, name = "linear_o", reuse = True),-1)
@@ -362,6 +378,7 @@ class Model(object):
             _o2 = tf.layers.dense(inputs=_o2, units=64, activation=None, name='linear3_o', reuse=tf.AUTO_REUSE)
             _o3 = tf.layers.dense(inputs=_o3, units=64, activation=None, name='linear3_o', reuse=tf.AUTO_REUSE)
             _o4 = tf.layers.dense(inputs=_o4, units=64, activation=None, name='linear3_o', reuse=tf.AUTO_REUSE)
+            '''
 
             o1_loss = tf.losses.cosine_distance(tf.nn.l2_normalize(_q, axis = -1), tf.nn.l2_normalize(_o1, axis = -1), axis = -1, reduction = tf.losses.Reduction.NONE)
             o2_loss = tf.losses.cosine_distance(tf.nn.l2_normalize(_q, axis = -1), tf.nn.l2_normalize(_o2, axis = -1), axis = -1, reduction = tf.losses.Reduction.NONE)
