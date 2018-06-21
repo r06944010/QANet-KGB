@@ -12,7 +12,7 @@ https://github.com/HKUST-KnowComp/R-Net
 
 
 from model import Model
-from demo import Demo
+# from demo import Demo
 from util import get_record_parser, convert_tokens, evaluate, get_batch_dataset, get_dataset
 
 
@@ -174,13 +174,19 @@ def test(config):
             for step in tqdm(range(total // config.batch_size + 1)):
                 qa_id, pred_ans = sess.run(
                     [model.qa_id, model.pred_ans])
-                answer_dict_, _ = convert_tokens(
+                answer_dict_, remapped_dict_ = convert_tokens(
                     eval_file, qa_id.tolist(), pred_ans)
                 answer_dict.update(answer_dict_)
-            with open('pred_tocfl.csv', 'w') as f:
+                remapped_dict.update(remapped_dict_)
+            print(len(remapped_dict))
+            with open(config.answer_file, "w") as fh:
+                print('dumping ans file to : %s' % str(config.answer_file))
+                json.dump(remapped_dict, fh)
+
+            with open(config.answer_csv, 'w') as f:
+                print('dumping ans file to : %s' % str(config.answer_csv))
                 s = csv.writer(f,delimiter=',',lineterminator='\n')
                 s.writerow(['idx','ans'])
                 l = ['A','B','C','D']
                 for i in range(1,321):  
                     s.writerow([i,l[answer_dict[str(i)]]])
-

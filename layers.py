@@ -35,6 +35,21 @@ initializer_relu = lambda: tf.contrib.layers.variance_scaling_initializer(factor
                                                              dtype=tf.float32)
 regularizer = tf.contrib.layers.l2_regularizer(scale = 3e-7)
 
+def biLSTM_layer_op(word_emb,N):
+    with tf.variable_scope("bi-lstm", reuse = tf.AUTO_REUSE):
+        fw_cell = tf.contrib.rnn.BasicLSTMCell(128, forget_bias=1.0, state_is_tuple=True)
+        bw_cell = tf.contrib.rnn.BasicLSTMCell(128, forget_bias=1.0, state_is_tuple=True)
+        init_state_fw = fw_cell.zero_state(N, dtype=tf.float32)
+        init_state_bw = bw_cell.zero_state(N, dtype=tf.float32)
+        outputs, final_state = tf.nn.bidirectional_dynamic_rnn(
+                                cell_fw=fw_cell,
+                                cell_bw=bw_cell,
+                                initial_state_fw=init_state_fw,
+                                initial_state_bw=init_state_bw,
+                                inputs=word_emb,
+                                time_major=False)
+    return tf.concat([final_state[0][1],final_state[1][1]], axis = -1)
+
 def glu(x):
     """Gated Linear Units from https://arxiv.org/pdf/1612.08083.pdf"""
     x, x_h = tf.split(x, 2, axis = -1)
@@ -538,7 +553,7 @@ def optimized_trilinear_for_attention(args, c_maxlen, q_maxlen, input_keep_prob=
             regularizer=regularizer,
             initializer=kernel_initializer)
         biases = tf.get_variable(
-            "linear_bias", [50],
+            "linear_bias", [1],
             dtype=dtype,
             regularizer=regularizer,
             initializer=bias_initializer)

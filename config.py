@@ -6,7 +6,7 @@ This file is taken and modified from R-Net by HKUST-KnowComp
 https://github.com/HKUST-KnowComp/R-Net
 '''
 
-from prepro_race import prepro
+# from prepro_race import prepro
 from main import train, test, demo
 
 flags = tf.flags
@@ -30,13 +30,15 @@ test_file = os.path.join(home, "corpus", "RACE", "trans1_fixed", "test")
 
 
 ### TOCFL
-# target_dir = "data_tocfl"
-# train_file = None
-# dev_file = None
-# test_file = os.path.join(home, "corpus", "tocfl", "transcription.csv")
+'''
+target_dir = "data_tocfl"
+train_file = None
+dev_file = None
+test_file = os.path.join(home, "corpus", "tocfl", "transcription.csv")
+'''
 
 train_dir = "train_race"
-model_name = "FRC"
+model_name = "bi-lstm"
 dir_name = os.path.join(train_dir)
 
 if not os.path.exists(train_dir):
@@ -60,6 +62,7 @@ test_meta = os.path.join(target_dir, "test_meta.json")
 word_dictionary = os.path.join(target_dir, "word_dictionary.json")
 char_dictionary = os.path.join(target_dir, "char_dictionary.json")
 answer_file = os.path.join(answer_dir, "answer.json")
+answer_csv = os.path.join(answer_dir, "answer.csv")
 
 if not os.path.exists(target_dir):
     os.makedirs(target_dir)
@@ -91,6 +94,7 @@ flags.DEFINE_string("test_eval_file", test_eval, "Out file for test eval")
 flags.DEFINE_string("dev_meta", dev_meta, "Out file for dev meta")
 flags.DEFINE_string("test_meta", test_meta, "Out file for test meta")
 flags.DEFINE_string("answer_file", answer_file, "Out file for answer")
+flags.DEFINE_string("answer_csv", answer_csv, "Out file for answer")
 flags.DEFINE_string("word_dictionary", word_dictionary, "Word dictionary")
 flags.DEFINE_string("char_dictionary", char_dictionary, "Character dictionary")
 
@@ -166,7 +170,6 @@ def main(_):
         config.batch_size = 2
         train(config)
     elif config.mode == "test":
-        
         test(config)
     elif config.mode == "demo":
         demo(config)

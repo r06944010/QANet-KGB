@@ -67,10 +67,12 @@ def get_dataset(record_file, parser, config):
 
 def convert_tokens(eval_file, qa_id, pred_ans):
     answer_dict = {}
-    concon = {}
+    remapped_dict = {}
     for qid, ans in zip(qa_id, pred_ans):
         answer_dict[str(qid)] = ans
-    return answer_dict, concon
+        uuid = eval_file[str(qid)]["uuid"]
+        remapped_dict[uuid] = int(ans)
+    return answer_dict, remapped_dict
 
 
 def evaluate(eval_file, answer_dict):

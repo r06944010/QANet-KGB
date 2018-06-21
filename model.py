@@ -1,6 +1,7 @@
 import tensorflow as tf
-from layers import initializer, regularizer, residual_block, highway, conv, mask_logits, trilinear, total_params, optimized_trilinear_for_attention, multihead_attention
-
+from layers import initializer, regularizer, residual_block, highway, conv, mask_logits, \
+                   trilinear, total_params, optimized_trilinear_for_attention, multihead_attention, \
+                   biLSTM_layer_op
 class Model(object):
     def __init__(self, config, batch, word_mat=None, char_mat=None, trainable=True, opt=True, demo = False, graph = None):
         self.config = config
@@ -41,19 +42,19 @@ class Model(object):
 
             if opt:
                 N, CL = config.batch_size if not self.demo else 1, config.char_limit
-                #self.c_maxlen = tf.reduce_max(self.c_len)
-                #self.q_maxlen = tf.reduce_max(self.q_len)
+                self.c_maxlen = tf.reduce_max(self.c_len)
+                self.q_maxlen = tf.reduce_max(self.q_len)
                 # set maxlen to constant
-                self.c_maxlen = 400
-                self.q_maxlen = 50
+                #self.c_maxlen = 400
+                #self.q_maxlen = 50
 
                 self.c = tf.slice(self.c, [0, 0], [N, self.c_maxlen]) # 32,?
                 self.q = tf.slice(self.q, [0, 0], [N, self.q_maxlen]) # 32,?
                 self.c_mask = tf.slice(self.c_mask, [0, 0], [N, self.c_maxlen])
                 self.q_mask = tf.slice(self.q_mask, [0, 0], [N, self.q_maxlen])
 
-                #self.opt_maxlen = tf.reduce_max(tf.concat([self.o1_len, self.o2_len, self.o3_len, self.o4_len], 0))
-                self.opt_maxlen = 50
+                self.opt_maxlen = tf.reduce_max(tf.concat([self.o1_len, self.o2_len, self.o3_len, self.o4_len], 0))
+                #self.opt_maxlen = 50
                 self.o1 = tf.slice(self.o1, [0, 0], [N, self.opt_maxlen])
                 self.o2 = tf.slice(self.o2, [0, 0], [N, self.opt_maxlen])
                 self.o3 = tf.slice(self.o3, [0, 0], [N, self.opt_maxlen])
@@ -114,7 +115,7 @@ class Model(object):
                 num_filters = d,
                 num_heads = nh,
                 seq_len = self.c_len,
-                scope = "Encoder_Residual_Block_c",
+                scope = "Encoder_Residual_Block_o",
                 bias = False,
                 dropout = self.dropout)
             q = residual_block(q_emb,
@@ -125,8 +126,8 @@ class Model(object):
                 num_filters = d,
                 num_heads = nh,
                 seq_len = self.q_len,
-                scope = "Encoder_Residual_Block_q",
-                # reuse = True, # Share the weights between passage and question
+                scope = "Encoder_Residual_Block_o",
+                reuse = tf.AUTO_REUSE, # Share the weights between passage and question
                 bias = False,
                 dropout = self.dropout)
             o1 = residual_block(o1_emb,
@@ -179,19 +180,6 @@ class Model(object):
                 dropout = self.dropout)
 
         with tf.variable_scope("Context_to_Query_Attention_Layer", reuse=tf.AUTO_REUSE) as scope:
-            scope.reuse_variables()
-            
-            def some_op(c=c, q=q, c_maxlen=self.c_maxlen, q_maxlen=self.q_maxlen, q_mask=self.q_mask, c_mask=self.c_mask):
-                S = optimized_trilinear_for_attention([c, q], c_maxlen, q_maxlen, input_keep_prob = 1.0 - self.dropout)
-                mask_q = tf.expand_dims(q_mask, 1)
-                S_ = tf.nn.softmax(mask_logits(S, mask = mask_q))
-                mask_c = tf.expand_dims(c_mask, 2)
-                S_T = tf.transpose(tf.nn.softmax(mask_logits(S, mask = mask_c), axis= 1),(0,2,1))
-                c2q = tf.matmul(S_, q)
-                q2c = tf.matmul(tf.matmul(S_, S_T), c)
-                attention_outputs = [c, c2q, c * c2q, c * q2c]
-                return attention_outputs
-
             S = optimized_trilinear_for_attention([c, q], self.c_maxlen, self.q_maxlen, input_keep_prob = 1.0 - self.dropout)
             mask_q = tf.expand_dims(self.q_mask, 1)
             S_ = tf.nn.softmax(mask_logits(S, mask = mask_q))
@@ -201,7 +189,6 @@ class Model(object):
             self.q2c = tf.matmul(tf.matmul(S_, S_T), c)
             attention_outputs = [c, self.c2q, c * self.c2q, c * self.q2c]
         
-        with tf.variable_scope("Context_to_Option_Attention_Layer", reuse=tf.AUTO_REUSE):
             S = optimized_trilinear_for_attention([c, o1], self.c_maxlen, self.opt_maxlen, input_keep_prob = 1.0 - self.dropout)
             mask_o1 = tf.expand_dims(self.o1_mask, 1)
             S_ = tf.nn.softmax(mask_logits(S, mask = mask_o1))
@@ -258,7 +245,7 @@ class Model(object):
                         dropout = self.dropout)
                     )
 
-        with tf.variable_scope("Model_Encoder_Layer_Opt", reuse = tf.AUTO_REUSE) as scope:
+        # with tf.variable_scope("Model_Encoder_Layer_Opt", reuse = tf.AUTO_REUSE) as scope:
             input0 = tf.concat(attention_output0, axis = -1)
             self.enc0 = [conv(input0, d, name = "input_projection")]
             self.enc0[0] = tf.nn.dropout(self.enc0[0], 1.0 - self.dropout)
@@ -346,19 +333,11 @@ class Model(object):
                 bias = False, dropout = self.dropout, reuse = True)
             '''
 
-            lstm_cell = tf.contrib.rnn.BasicLSTMCell(128, forget_bias=1.0, state_is_tuple=True)
-            init_state = lstm_cell.zero_state(N, dtype=tf.float32)
-            outputs, final_state_q = tf.nn.dynamic_rnn(lstm_cell, self.enc[1], initial_state=init_state, time_major=False)
-            outputs, final_state_o1 = tf.nn.dynamic_rnn(lstm_cell, self.enc0[1], initial_state=init_state, time_major=False)
-            outputs, final_state_o2 = tf.nn.dynamic_rnn(lstm_cell, self.enc1[1], initial_state=init_state, time_major=False)
-            outputs, final_state_o3 = tf.nn.dynamic_rnn(lstm_cell, self.enc2[1], initial_state=init_state, time_major=False)
-            outputs, final_state_o4 = tf.nn.dynamic_rnn(lstm_cell, self.enc3[1], initial_state=init_state, time_major=False)
-
-            _q = final_state_q[1]
-            _o1 = final_state_o1[1]
-            _o2 = final_state_o2[1]
-            _o3 = final_state_o3[1]
-            _o4 = final_state_o4[1]
+            _q = biLSTM_layer_op(self.enc[1],N)
+            _o1 = biLSTM_layer_op(self.enc0[1],N)
+            _o2 = biLSTM_layer_op(self.enc1[1],N)
+            _o3 = biLSTM_layer_op(self.enc2[1],N)
+            _o4 = biLSTM_layer_op(self.enc3[1],N)
 
             '''
             _q  = tf.squeeze(conv(self.enc[1] , 1, bias = False, name = "linear_q"),-1)
