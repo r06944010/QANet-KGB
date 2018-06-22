@@ -19,9 +19,8 @@ from util import get_record_parser, convert_tokens, evaluate, get_batch_dataset,
 def train(config):
     with open(config.word_emb_file, "r") as fh:
         word_mat = np.array(json.load(fh), dtype=np.float32)
-    # with open(config.char_emb_file, "r") as fh:
-    #     char_mat = np.array(json.load(fh), dtype=np.float32)
-    char_mat = None
+    with open(config.char_emb_file, "r") as fh:
+        char_mat = np.array(json.load(fh), dtype=np.float32)
     with open(config.train_eval_file, "r") as fh:
         train_eval_file = json.load(fh)
     with open(config.dev_eval_file, "r") as fh:
@@ -79,15 +78,17 @@ def train(config):
                     for s in summ:
                         writer.add_summary(s, global_step)
                     print()
-                    print("step %d, training accuarcy %g" % (global_step, metrics['acc']))
                     print()
-
+                    print("step %d, training accuarcy %g ." % (global_step, metrics['acc']))
+                    print()
+                    print()
                     metrics, summ = evaluate_batch(
                         model, dev_total // config.batch_size + 1, dev_eval_file, sess, "dev", handle, dev_handle)
                     print()
-                    print("step %d, dev accuarcy %g" % (global_step, metrics['acc']))
                     print()
-
+                    print("step %d, dev accuarcy %g ." % (global_step, metrics['acc']))
+                    print()
+                    print()
                     dev_acc = metrics["acc"]
                     if dev_acc < best_acc:
                         patience += 1

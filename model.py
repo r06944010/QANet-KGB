@@ -20,10 +20,13 @@ class Model(object):
                 self.y1 = tf.placeholder(tf.int32, [None, config.test_para_limit],"answer_index1")
                 self.y2 = tf.placeholder(tf.int32, [None, config.test_para_limit],"answer_index2")
             else:
-                self.c, self.q, self.o1, self.o2, self.o3, self.o4, self.qa_id, self.ans = batch.get_next()
+                self.c, self.q, self.o1, self.o2, self.o3, self.o4, self.ch, self.qh, self.oh1, \
+                self.oh2, self.oh3, self.oh4, self.qa_id, self.ans = batch.get_next()
 
             self.word_mat = tf.get_variable("word_mat", initializer=tf.constant(
                 word_mat, dtype=tf.float32), trainable=False)
+            self.char_mat = tf.get_variable("char_mat", initializer=tf.constant(
+                char_mat, dtype=tf.float32))
 
             self.c_mask = tf.cast(self.c, tf.bool) # ?, 400
             self.q_mask = tf.cast(self.q, tf.bool)
@@ -44,9 +47,6 @@ class Model(object):
                 N, CL = config.batch_size if not self.demo else 1, config.char_limit
                 self.c_maxlen = tf.reduce_max(self.c_len)
                 self.q_maxlen = tf.reduce_max(self.q_len)
-                # set maxlen to constant
-                #self.c_maxlen = 400
-                #self.q_maxlen = 50
 
                 self.c = tf.slice(self.c, [0, 0], [N, self.c_maxlen]) # 32,?
                 self.q = tf.slice(self.q, [0, 0], [N, self.q_maxlen]) # 32,?
@@ -54,7 +54,6 @@ class Model(object):
                 self.q_mask = tf.slice(self.q_mask, [0, 0], [N, self.q_maxlen])
 
                 self.opt_maxlen = tf.reduce_max(tf.concat([self.o1_len, self.o2_len, self.o3_len, self.o4_len], 0))
-                #self.opt_maxlen = 50
                 self.o1 = tf.slice(self.o1, [0, 0], [N, self.opt_maxlen])
                 self.o2 = tf.slice(self.o2, [0, 0], [N, self.opt_maxlen])
                 self.o3 = tf.slice(self.o3, [0, 0], [N, self.opt_maxlen])
@@ -64,8 +63,28 @@ class Model(object):
                 self.o3_mask = tf.slice(self.o3_mask, [0, 0], [N, self.opt_maxlen])
                 self.o4_mask = tf.slice(self.o4_mask, [0, 0], [N, self.opt_maxlen])
 
+                self.ch = tf.slice(self.ch, [0, 0, 0], [N, self.c_maxlen, CL])
+                self.qh = tf.slice(self.qh, [0, 0, 0], [N, self.q_maxlen, CL])
+                self.oh1 = tf.slice(self.oh1, [0, 0, 0], [N, self.opt_maxlen, CL])
+                self.oh2 = tf.slice(self.oh2, [0, 0, 0], [N, self.opt_maxlen, CL])
+                self.oh3 = tf.slice(self.oh3, [0, 0, 0], [N, self.opt_maxlen, CL])
+                self.oh4 = tf.slice(self.oh4, [0, 0, 0], [N, self.opt_maxlen, CL])
             else:
                 self.c_maxlen, self.q_maxlen = config.para_limit, config.ques_limit
+
+            self.ch_len = tf.reshape(tf.reduce_sum(
+                tf.cast(tf.cast(self.ch, tf.bool), tf.int32), axis=2), [-1])
+            self.qh_len = tf.reshape(tf.reduce_sum(
+                tf.cast(tf.cast(self.qh, tf.bool), tf.int32), axis=2), [-1])
+            self.oh1_len = tf.reshape(tf.reduce_sum(
+                tf.cast(tf.cast(self.oh1, tf.bool), tf.int32), axis=2), [-1])
+            self.oh2_len = tf.reshape(tf.reduce_sum(
+                tf.cast(tf.cast(self.oh2, tf.bool), tf.int32), axis=2), [-1])
+            self.oh3_len = tf.reshape(tf.reduce_sum(
+                tf.cast(tf.cast(self.oh3, tf.bool), tf.int32), axis=2), [-1])
+            self.oh4_len = tf.reshape(tf.reduce_sum(
+                tf.cast(tf.cast(self.oh4, tf.bool), tf.int32), axis=2), [-1])
+
 
             self.forward()
             total_params()
@@ -82,28 +101,41 @@ class Model(object):
 
     def forward(self):
         config = self.config
-        N, PL, QL, CL, d, dc, nh = config.batch_size if not self.demo else 1, self.c_maxlen, self.q_maxlen, config.char_limit, config.hidden, config.char_dim, config.num_heads
+        N, PL, QL, OL, CL, d, dc, nh = config.batch_size if not self.demo else 1, self.c_maxlen, \
+                                   self.q_maxlen, self.opt_maxlen, config.char_limit, \
+                                   config.hidden, config.ta_c_dim, config.num_heads
 
         with tf.variable_scope("Input_Embedding_Layer"):
+            def some_op(ch, L):
+                _emb = tf.reshape(tf.nn.embedding_lookup(self.char_mat, ch), [N * L, CL, dc])
+                _emb = tf.nn.dropout(_emb, 1.0 - 0.5 * self.dropout)
+                _emb = conv(_emb, d, bias = True, activation = tf.nn.relu, \
+                       kernel_size = 5, name = "char_conv", reuse = tf.AUTO_REUSE)
+                _emb = tf.reduce_max(_emb, axis = 1)
+                _emb = tf.reshape(_emb, [N, L, _emb.shape[-1]])
+                return _emb
 
-            # 32,?,300 batch,self.c_maxlen,emb_dim
-            c_emb = tf.nn.dropout(tf.nn.embedding_lookup(self.word_mat, self.c), 1.0 - self.dropout)
-            # 32,?,300
-            q_emb = tf.nn.dropout(tf.nn.embedding_lookup(self.word_mat, self.q), 1.0 - self.dropout)
+            ch_emb = some_op(self.ch, PL)
+            qh_emb = some_op(self.qh, QL)
+            oh1_emb = some_op(self.oh1, OL)
+            oh2_emb = some_op(self.oh2, OL)
+            oh3_emb = some_op(self.oh3, OL)
+            oh4_emb = some_op(self.oh4, OL)
 
-            o1_emb = tf.nn.dropout(tf.nn.embedding_lookup(self.word_mat, self.o1), 1.0 - self.dropout)
-            o2_emb = tf.nn.dropout(tf.nn.embedding_lookup(self.word_mat, self.o2), 1.0 - self.dropout)
-            o3_emb = tf.nn.dropout(tf.nn.embedding_lookup(self.word_mat, self.o3), 1.0 - self.dropout)
-            o4_emb = tf.nn.dropout(tf.nn.embedding_lookup(self.word_mat, self.o4), 1.0 - self.dropout)
+            def some_op2(word_emb, char_emb):
+                # 32,?,300 batch,self.c_maxlen,emb_dim
+                _emb = tf.nn.dropout(tf.nn.embedding_lookup(self.word_mat, word_emb), 1.0 - self.dropout)
+                _emb = tf.concat([_emb, char_emb], axis=2)
+                _emb = highway(_emb, size = d, scope = "highway", dropout = self.dropout, reuse = tf.AUTO_REUSE)
+                return _emb
 
-            # 32,?,96
-            c_emb = highway(c_emb, size = d, scope = "highway", dropout = self.dropout, reuse = None)
-            # 32,?,96
-            q_emb = highway(q_emb, size = d, scope = "highway", dropout = self.dropout, reuse = True)
-            o1_emb = highway(o1_emb, size = d, scope = "highway", dropout = self.dropout, reuse = True)
-            o2_emb = highway(o2_emb, size = d, scope = "highway", dropout = self.dropout, reuse = True)
-            o3_emb = highway(o3_emb, size = d, scope = "highway", dropout = self.dropout, reuse = True)
-            o4_emb = highway(o4_emb, size = d, scope = "highway", dropout = self.dropout, reuse = True)
+            c_emb = some_op2(self.c, ch_emb)
+            q_emb = some_op2(self.q, qh_emb)
+            o1_emb = some_op2(self.o1, oh1_emb)
+            o2_emb = some_op2(self.o2, oh2_emb)
+            o3_emb = some_op2(self.o3, oh3_emb)
+            o4_emb = some_op2(self.o4, oh4_emb)
+
 
         with tf.variable_scope("Embedding_Encoder_Layer", reuse = tf.AUTO_REUSE) as scope:
             # scope.reuse_variables()
@@ -319,19 +351,6 @@ class Model(object):
                 )
 
         with tf.variable_scope("Output_Layer") as scope:
-            # scope.reuse_variables()
-
-            # do self attention
-            '''
-            _r = multihead_attention(self.enc[1], d, nh, memory=self.enc0[1], seq_len = self.c_len,
-                bias = False, dropout = self.dropout)
-            _w1 = multihead_attention(self.enc[1], d, nh, memory=self.enc1[1], seq_len = self.c_len,
-                bias = False, dropout = self.dropout, reuse = True)
-            _w2 = multihead_attention(self.enc[1], d, nh, memory=self.enc2[1], seq_len = self.c_len,
-                bias = False, dropout = self.dropout, reuse = True)
-            _w3 = multihead_attention(self.enc[1], d, nh, memory=self.enc3[1], seq_len = self.c_len,
-                bias = False, dropout = self.dropout, reuse = True)
-            '''
 
             _q = biLSTM_layer_op(self.enc[1],N)
             _o1 = biLSTM_layer_op(self.enc0[1],N)

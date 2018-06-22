@@ -6,7 +6,7 @@ This file is taken and modified from R-Net by HKUST-KnowComp
 https://github.com/HKUST-KnowComp/R-Net
 '''
 
-# from prepro_race import prepro
+from prepro_race import prepro
 from main import train, test, demo
 
 flags = tf.flags
@@ -23,7 +23,7 @@ glove_word_file = os.path.join(home, "corpus", "glove", "glove.840B.300d.txt")
 
 ### RACE
 
-target_dir = "data_race"
+target_dir = "race_word_and_char"
 train_file = os.path.join(home, "corpus", "RACE", "trans1_fixed", "train")
 dev_file = os.path.join(home, "corpus", "RACE", "trans1_fixed", "dev")
 test_file = os.path.join(home, "corpus", "RACE", "trans1_fixed", "test")
@@ -31,7 +31,7 @@ test_file = os.path.join(home, "corpus", "RACE", "trans1_fixed", "test")
 
 ### TOCFL
 '''
-target_dir = "data_tocfl"
+target_dir = "data_tocfl_0621"
 train_file = None
 dev_file = None
 test_file = os.path.join(home, "corpus", "tocfl", "transcription.csv")
@@ -102,7 +102,7 @@ flags.DEFINE_string("char_dictionary", char_dictionary, "Character dictionary")
 flags.DEFINE_integer("glove_char_size", 94, "Corpus size for Glove")
 flags.DEFINE_integer("glove_word_size", int(2.2e6), "Corpus size for Glove")
 flags.DEFINE_integer("glove_dim", 300, "Embedding dimension for Glove")
-flags.DEFINE_integer("char_dim", 64, "Embedding dimension for char")
+# flags.DEFINE_integer("char_dim", 64, "Embedding dimension for char")
 
 flags.DEFINE_integer("para_limit", 400, "Limit length for paragraph")
 flags.DEFINE_integer("ques_limit", 50, "Limit length for question")
@@ -110,7 +110,7 @@ flags.DEFINE_integer("ans_limit", 50, "Limit length for answers")
 flags.DEFINE_integer("test_para_limit", 1000, "Limit length for paragraph in test file")
 flags.DEFINE_integer("test_ques_limit", 100, "Limit length for question in test file")
 flags.DEFINE_integer("test_ans_limit", 100, "Limit length for answer in test file")
-flags.DEFINE_integer("char_limit", 16, "Limit length for character")
+flags.DEFINE_integer("char_limit", 10, "Limit length for character")
 flags.DEFINE_integer("word_count_limit", -1, "Min count for word")
 flags.DEFINE_integer("char_count_limit", -1, "Min count for char")
 
@@ -123,7 +123,7 @@ flags.DEFINE_integer("batch_size", 16, "Batch size")
 flags.DEFINE_integer("num_steps", 60000, "Number of steps")
 flags.DEFINE_integer("checkpoint", 1000, "checkpoint to save and evaluate the model")
 flags.DEFINE_integer("period", 100, "period to save batch loss")
-flags.DEFINE_integer("val_num_batches", 150, "Number of batches to evaluate the model")
+flags.DEFINE_integer("val_num_batches", 87861//16, "Number of batches to evaluate the model")
 flags.DEFINE_float("dropout", 0.1, "Dropout prob across the layers")
 flags.DEFINE_float("grad_clip", 5.0, "Global Norm gradient clipping rate")
 flags.DEFINE_float("learning_rate", 0.001, "Learning rate")
@@ -143,27 +143,30 @@ flags.DEFINE_string("fasttext_file", fasttext_file, "Fasttext word embedding sou
 flags.DEFINE_boolean("fasttext", False, "Whether to use fasttext")
 
 ## Self define CHINESE word to vector
-ta_w2v = os.path.join(home, "corpus", "advdl", "w2v_dim300", "model.vec")
+ta_w2v = os.path.join(home, "corpus", "advdl", "word2vec", "race_word_vector_300.txt")
 flags.DEFINE_string("ta_w2v", ta_w2v, "ta word embedding chinese")
 
-ta_c2v = os.path.join(home, "corpus", "advdl", "w2v_dim300", "model_char.vec")
+ta_c2v = os.path.join(home, "corpus", "advdl", "word2vec", "single_w2v_300.txt")
 flags.DEFINE_string("ta_c2v", ta_c2v, "ta character embedding chinese")
 
-flags.DEFINE_integer("ta_char_size", 15210, "Corpus size for Glove")
-flags.DEFINE_integer("ta_word_size", int(763423), "Corpus size for Glove")
+flags.DEFINE_integer("ta_char_size", 174894, "Corpus size for char2vec")
+flags.DEFINE_integer("ta_word_size", 52106, "Corpus size for Glove")
 flags.DEFINE_integer("ta_dim", 300, "Embedding dimension for Glove")
-flags.DEFINE_integer("ta_c_dim", 100, "Embedding dimension for char")
+flags.DEFINE_integer("ta_c_dim", 300, "Embedding dimension for char")
 
-
+flags.DEFINE_string("mac", "my531", "Which Machine")
 
 def main(_):
     config = flags.FLAGS
+    if config.mac == "m40":
+        config.ta_w2v = os.path.join(home, "data", "word2vec", "race_word_vector_300.txt")
+        config.ta_c2v = os.path.join(home, "data", "word2vec", "single_w2v_300.txt")
     if config.mode == "train":
         train(config)
     elif config.mode == "prepro":
         prepro(config)
     elif config.mode == "debug":
-        config.num_steps = 2
+        config.num_steps = 1
         config.val_num_batches = 1
         config.checkpoint = 1
         config.period = 1

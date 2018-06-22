@@ -5,4 +5,5 @@ data_tocfl/
 __pycache__/
 train_race/
 test/
+race_word_and_char/
 jieba

@@ -48,6 +48,7 @@ def process_file(filename, data_type, word_counter, char_counter):
 
             article = source["article"]
             context_tokens = word_tokenize(article)
+            context_chars = [list(token) for token in context_tokens]
 
             for i in range(len(source["questions"])):
                 total += 1
@@ -59,12 +60,18 @@ def process_file(filename, data_type, word_counter, char_counter):
                 ans = [x for x in range(4) if l[x]==ans][0] # 0123
 
                 ques_tokens = word_tokenize(ques)
-                opt_tokens = [word_tokenize(opt[x]) for x in range(4)]  # wrong answer
+                ques_chars = [list(token) for token in ques_tokens]
 
-                example = {"context_tokens": context_tokens, "ques_tokens": ques_tokens,
-                           "options": opt_tokens, "id": total, "ans": ans}
+                opt_tokens = [word_tokenize(opt[x]) for x in range(4)]
+                opt_chars = [[list(token) for token in opt_tokens[x]] for x in range(4)]
+
+                example = {"context_tokens": context_tokens, "context_chars": context_chars, 
+                           "ques_tokens": ques_tokens, "ques_chars": ques_chars,
+                           "options": opt_tokens, "options_chars": opt_chars,
+                           "id": total, "ans": ans}
                 examples.append(example)
                 eval_examples[str(total)] = {"context": article, "ans": ans, "uuid": source["id"]}
+    
     random.shuffle(examples)
     print("{} questions in total".format(len(examples)))
     return examples, eval_examples
@@ -196,14 +203,17 @@ def build_features(config, examples, data_type, out_file, word2idx_dict, char2id
 
         total += 1
         context_idxs = np.zeros([para_limit], dtype=np.int32)
-        # context_char_idxs = np.zeros([para_limit, char_limit], dtype=np.int32)
+        context_char_idxs = np.zeros([para_limit, char_limit], dtype=np.int32)
         ques_idxs = np.zeros([ques_limit], dtype=np.int32)
-        # ques_char_idxs = np.zeros([ques_limit, char_limit], dtype=np.int32)
+        ques_char_idxs = np.zeros([ques_limit, char_limit], dtype=np.int32)
         opt_idxs = np.zeros([4, ans_limit], dtype=np.float32)
+        opt_char_idxs = np.zeros([4, ans_limit, char_limit], dtype=np.float32)
 
         def _get_word(word):
             return word2idx_dict[word] if word in word2idx_dict else 1
-
+        
+        def _get_char(char):
+            return char2idx_dict[char] if char in char2idx_dict else 1
 
         for i, token in enumerate(example["context_tokens"]):
             context_idxs[i] = _get_word(token)
@@ -215,10 +225,32 @@ def build_features(config, examples, data_type, out_file, word2idx_dict, char2id
             for i, token in enumerate(example["options"][k]):
                 opt_idxs[k][i] = _get_word(token)
 
+        for i, token in enumerate(example["context_chars"]):
+            for j, char in enumerate(token):
+                if j == char_limit:
+                    break
+                context_char_idxs[i, j] = _get_char(char)
+
+        for i, token in enumerate(example["ques_chars"]):
+            for j, char in enumerate(token):
+                if j == char_limit:
+                    break
+                ques_char_idxs[i, j] = _get_char(char)
+
+        for k in range(4):
+            for i, token in enumerate(example["options_chars"][k]):
+                for j, char in enumerate(token):
+                    if j == char_limit:
+                        break
+                    opt_char_idxs[k,i,j] = _get_char(char)
+
         record = tf.train.Example(features=tf.train.Features(feature={
                                   "context_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[context_idxs.tostring()])),
                                   "ques_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[ques_idxs.tostring()])),
                                   "opt_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[opt_idxs.tostring()])),
+                                  "context_char_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[context_char_idxs.tostring()])),
+                                  "ques_char_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[ques_char_idxs.tostring()])),
+                                  "opt_char_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[opt_char_idxs.tostring()])),
                                   "id": tf.train.Feature(int64_list=tf.train.Int64List(value=[example["id"]])),
                                   "ans": tf.train.Feature(int64_list=tf.train.Int64List(value=[example["ans"]])),
                                   }))
@@ -247,10 +279,12 @@ def prepro(config):
         config.test_file, "test", word_counter, char_counter)
 
     word_emb_file = config.ta_w2v
+    char_emb_file = config.ta_c2v
 
     word_emb_mat, word2idx_dict = get_embedding(
         word_counter, "word", emb_file=word_emb_file, size=config.ta_word_size, vec_size=config.ta_dim)
-    char2idx_dict = {}
+    char_emb_mat, char2idx_dict = get_embedding(
+        char_counter, "char", emb_file=char_emb_file, size=config.ta_char_size, vec_size=config.ta_c_dim)
 
     build_features(config, train_examples, "train",
                    config.train_record_file, word2idx_dict, char2idx_dict)
@@ -260,9 +294,11 @@ def prepro(config):
                                config.test_record_file, word2idx_dict, char2idx_dict, is_test=True)
 
     save(config.word_emb_file, word_emb_mat, message="word embedding")
+    save(config.char_emb_file, char_emb_mat, message="char embedding")
     save(config.train_eval_file, train_eval, message="train eval")
     save(config.dev_eval_file, dev_eval, message="dev eval")
     save(config.test_eval_file, test_eval, message="test eval")
     save(config.dev_meta, dev_meta, message="dev meta")
     save(config.test_meta, test_meta, message="test meta")
     save(config.word_dictionary, word2idx_dict, message="word dictionary")
+    save(config.char_dictionary, char2idx_dict, message="char dictionary")

@@ -20,8 +20,11 @@ def get_record_parser(config, is_test=False):
                                                "context_idxs": tf.FixedLenFeature([], tf.string),
                                                "ques_idxs": tf.FixedLenFeature([], tf.string),
                                                "opt_idxs": tf.FixedLenFeature([], tf.string),
-                                               "id": tf.FixedLenFeature([], tf.int64),
-                                               "ans": tf.FixedLenFeature([], tf.int64)
+                                               "context_char_idxs": tf.FixedLenFeature([], tf.string),
+                                               "ques_char_idxs": tf.FixedLenFeature([], tf.string),
+                                               "opt_char_idxs": tf.FixedLenFeature([], tf.string),
+                                               "ans": tf.FixedLenFeature([], tf.int64),
+                                               "id": tf.FixedLenFeature([], tf.int64)
                                            })
         context_idxs = tf.reshape(tf.decode_raw(
             features["context_idxs"], tf.int32), [para_limit])
@@ -29,9 +32,20 @@ def get_record_parser(config, is_test=False):
             features["ques_idxs"], tf.int32), [ques_limit])
         opt_idxs = tf.reshape(tf.decode_raw(
             features["opt_idxs"], tf.int32), [4, ans_limit])
+
+        context_char_idxs = tf.reshape(tf.decode_raw(
+            features["context_char_idxs"], tf.int32), [para_limit, char_limit])
+        ques_char_idxs = tf.reshape(tf.decode_raw(
+            features["ques_char_idxs"], tf.int32), [ques_limit, char_limit])
+        opt_char_idxs = tf.reshape(tf.decode_raw(
+            features["opt_char_idxs"], tf.int32), [4, ans_limit, char_limit])
+
         qa_id = features["id"]
         ans = features["ans"]
-        return context_idxs, ques_idxs, opt_idxs[0], opt_idxs[1], opt_idxs[2], opt_idxs[3], qa_id, ans
+        return context_idxs, ques_idxs, opt_idxs[0], opt_idxs[1], opt_idxs[2], opt_idxs[3],\
+               context_char_idxs, ques_char_idxs, opt_char_idxs[0], opt_char_idxs[1], \
+               opt_char_idxs[2], opt_char_idxs[3], \
+               qa_id, ans
     return parse
 
 
